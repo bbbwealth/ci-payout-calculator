@@ -79,9 +79,12 @@
     [data-mode="example"] .entry { background: #f1f5fc; }
     .unit { flex: 0 0 auto; color: var(--muted); font-size: 1rem; }
     .unit .en { margin-top: 0; }
-    input { width: 100%; min-width: 0; min-height: 54px; padding: 6px 0; border: 0; outline: none; background: transparent; color: var(--navy); font: inherit; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-    input:focus-visible { outline: none; }
+    .entry input { width: 100%; min-width: 0; min-height: 54px; padding: 6px 0; border: 0; outline: none; background: transparent; color: var(--navy); font: inherit; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    .entry input:focus-visible { outline: none; }
     .entry:has(input[aria-invalid="true"]) { border-color: #a52c36; }
+    .coverage-option { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border: 1px solid #7388a4; border-radius: 8px; background: var(--sky); font-size: 1.12rem; cursor: pointer; }
+    .coverage-option[hidden], .result[hidden] { display: none; }
+    .coverage-option input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--blue); }
     .field-error { grid-column: 1 / -1; margin: 0; color: #8c2531; font-weight: 650; }
     .field-error .en { color: inherit; }
     .sample-badge { display: none; width: fit-content; max-width: 100%; padding: 4px 7px; margin-top: 5px; gap: 0 5px; flex-wrap: wrap; border: 1px solid #ecd775; border-radius: 6px; background: #fff1a8; color: var(--navy); font-size: .875rem; font-weight: 750; line-height: 1.35; }
@@ -248,6 +251,10 @@
           </div>
         </div>
         <div class="field">
+          <label class="coverage-option" id="no-cover-option">
+            <input type="checkbox" id="no-cover" autocomplete="off" aria-controls="existing">
+            <span>我还没有重疾险<span class="en" lang="en-MY">I don’t have critical illness cover yet</span></span>
+          </label>
           <div>
             <label for="existing">现有重疾险能赔多少<span class="en" lang="en-MY">Payout from existing CI cover</span></label>
             <small id="existing-hint" class="hint">按保单在该疾病和阶段实际可赔的金额填写。医药卡额度不用填。<span class="en" lang="en-MY">Use what your policy pays for that illness and stage. Leave out your medical card limit.</span></small>
@@ -262,7 +269,7 @@
       <section class="card result-card" id="results" aria-labelledby="result-heading">
         <h2 id="result-heading" tabindex="-1">计算结果<span class="en" lang="en-MY">Your results</span></h2>
         <p class="status" id="status" role="status"><span id="status-zh">填完 6 项后，这里会显示结果。</span><span class="en" lang="en-MY" id="status-en">Enter all six figures to see your results.</span></p>
-        <div class="result">
+        <div class="result" id="total-card">
           <span class="result-label" id="total-label">预计总共需要多少赔款<span class="en" lang="en-MY">Estimated total payout needed</span></span>
           <span class="sample-badge" id="total-example">仅为假设<span class="en" lang="en-MY">Example only</span></span>
           <output id="total" aria-labelledby="total-label" aria-describedby="total-explanation" aria-live="off">—</output>
@@ -271,7 +278,7 @@
           </p>
         </div>
         <div class="result">
-          <span class="result-label" id="gap-label">还差多少赔款<span class="en" lang="en-MY">Additional payout needed</span></span>
+          <span class="result-label" id="gap-label"><span id="gap-label-zh">还差多少赔款</span><span id="gap-label-en" class="en" lang="en-MY">Additional payout needed</span></span>
           <span class="sample-badge" id="gap-example">仅为假设<span class="en" lang="en-MY">Example only</span></span>
           <output id="gap" aria-labelledby="gap-label" aria-describedby="gap-summary gap-explanation" aria-live="off">—</output>
           <p class="gap-summary" id="gap-summary" hidden>
@@ -308,12 +315,19 @@
   <script>
     const app = document.getElementById("app");
     const form = document.getElementById("calculator");
-    const fields = [...form.querySelectorAll("input")];
+    const fields = [...form.querySelectorAll(".entry input")];
+    const noCover = document.getElementById("no-cover");
+    const noCoverOption = document.getElementById("no-cover-option");
+    const existingPayout = document.getElementById("existing");
     const inputHeading = document.getElementById("input-heading");
     const results = document.getElementById("results");
     const resultHeading = document.getElementById("result-heading");
     const totalOutput = document.getElementById("total");
+    const totalCard = document.getElementById("total-card");
     const gapOutput = document.getElementById("gap");
+    const gapLabelZh = document.getElementById("gap-label-zh");
+    const gapLabelEn = document.getElementById("gap-label-en");
+    const gapExplanation = document.getElementById("gap-explanation");
     const gapSummary = document.getElementById("gap-summary");
     const gapSummaryZh = document.getElementById("gap-summary-zh");
     const gapSummaryEn = document.getElementById("gap-summary-en");
@@ -335,6 +349,7 @@
     const monthsMessage = ["请输入 0 或以上的整数。", "Enter a whole number of 0 or more."];
     let showingExample = false;
     let triedToSeeResults = false;
+    let previousExistingPayout = "";
 
     const fieldErrors = fields.map((field) => {
       const error = document.createElement("p");
@@ -399,6 +414,12 @@
     }
 
     function update() {
+      const firstTimeBuyer = noCover.checked && !showingExample;
+      totalCard.hidden = gapExplanation.hidden = firstTimeBuyer;
+      gapLabelZh.textContent = firstTimeBuyer ? "预计需要多少重疾险赔款" : "还差多少赔款";
+      gapLabelEn.textContent = firstTimeBuyer ? "Estimated critical illness payout needed" : "Additional payout needed";
+      const gapDescription = firstTimeBuyer ? "gap-summary" : "gap-summary gap-explanation";
+      gapOutput.setAttribute("aria-describedby", showingExample ? "gap-example " + gapDescription : gapDescription);
       const parsed = fields.map(parseField);
       fields.forEach((field, index) => updateFieldError(field, index, parsed[index]));
       const firstIncomplete = parsed.findIndex((entry) => entry.value === null);
@@ -420,7 +441,10 @@
       const gapAmount = ringgit(gap);
       totalOutput.value = ringgit(total);
       gapOutput.value = gapAmount;
-      if (gap === 0n) {
+      if (firstTimeBuyer) {
+        gapSummaryZh.textContent = "按你填的数字，预计需要 " + gapAmount.replace("RM ", "RM") + " 的重疾险赔款。";
+        gapSummaryEn.textContent = "Based on your figures, you may need " + gapAmount + " in critical illness payout.";
+      } else if (gap === 0n) {
         gapSummaryZh.textContent = "按你填的数字，这次估算不用再补赔款";
         gapSummaryEn.textContent = "Based on your figures, this estimate shows no extra payout is needed.";
       } else {
@@ -439,26 +463,31 @@
     function changeMode(useExample) {
       showingExample = useExample;
       triedToSeeResults = false;
+      noCover.checked = false;
+      noCover.disabled = noCoverOption.hidden = useExample;
+      previousExistingPayout = "";
       app.dataset.mode = useExample ? "example" : "personal";
       fields.forEach((field, index) => {
         field.readOnly = useExample;
         field.value = useExample ? exampleValues[index] : "";
       });
-      for (const result of [totalOutput, gapOutput]) {
-        const explanation = result === gapOutput ? "gap-summary gap-explanation" : "total-explanation";
-        result.setAttribute("aria-describedby", useExample ? result.id + "-example " + explanation : explanation);
-      }
+      totalOutput.setAttribute("aria-describedby", useExample ? "total-example total-explanation" : "total-explanation");
       exampleButton.hidden = clearButton.hidden = personalNote.hidden = useExample;
       ownFiguresButton.hidden = exampleNote.hidden = !useExample;
       update();
     }
 
-    form.addEventListener("input", () => {
-      if (!showingExample) update();
+    form.addEventListener("input", (event) => {
+      if (!showingExample && event.target !== noCover) update();
+    });
+    noCover.addEventListener("change", () => {
+      if (noCover.checked) previousExistingPayout = existingPayout.value;
+      existingPayout.value = noCover.checked ? "0" : previousExistingPayout;
+      existingPayout.readOnly = noCover.checked;
+      update();
     });
     form.addEventListener("reset", () => {
-      triedToSeeResults = false;
-      if (!showingExample) requestAnimationFrame(update);
+      if (!showingExample) changeMode(false);
     });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
