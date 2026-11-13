@@ -102,7 +102,12 @@
     .result-explanation .en { color: #2c4059; }
     .gap-summary { margin: 8px 0 2px; padding: 10px 12px; background: #fff8d3; border: 1px solid #cfb246; border-radius: 8px; font-size: 1.14rem; overflow-wrap: anywhere; }
     .gap-summary .en { color: inherit; font-weight: 650; }
-    .copy-result { margin-top: 6px; width: 100%; }
+    .copy-preview { margin-top: 10px; padding: 12px; border: 1px solid #cfb246; border-radius: 8px; background: #fffdf3; overflow-wrap: anywhere; }
+    .copy-preview h3 { margin: 0 0 8px; font-size: 1.12rem; }
+    .copy-preview h3 .en { color: inherit; font-weight: 650; }
+    .copy-preview p { margin: 0; }
+    .copy-preview p + p { margin-top: 8px; }
+    .copy-result { margin-top: 8px; width: 100%; }
     .copy-feedback { margin: 0; font-weight: 650; }
     .copy-feedback span:not(:empty) { display: block; margin-top: 4px; }
     .copy-feedback span:empty { display: none; }
@@ -294,12 +299,16 @@
             <span class="en" lang="en-MY">This is the estimated payout you need. Your monthly premium is separate. Use this figure to ask your insurance adviser how much the policy would pay if you meet the claim conditions.</span>
           </p>
           <div id="copy-result-actions" hidden>
+            <div class="copy-preview">
+              <h3 id="copy-preview-heading">复制内容<span class="en" lang="en-MY">Text to copy</span></h3>
+              <div id="copy-preview-text">
+                <p id="copy-preview-zh"></p>
+                <p id="copy-preview-en" lang="en-MY"></p>
+              </div>
+              <textarea class="copy-fallback" id="copy-message" aria-labelledby="copy-preview-heading" readonly hidden></textarea>
+            </div>
             <button type="button" id="copy-result" class="copy-result">复制结果<span class="en" lang="en-MY">Copy result</span></button>
             <p class="result-explanation copy-feedback" role="status"><span id="copy-feedback-zh"></span><span id="copy-feedback-en" class="en" lang="en-MY"></span></p>
-            <div id="copy-fallback" hidden>
-              <label for="copy-message">可手动复制的结果<span class="en" lang="en-MY">Result to copy manually</span></label>
-              <textarea class="copy-fallback" id="copy-message" readonly></textarea>
-            </div>
           </div>
           <p class="result-explanation" id="gap-explanation">从上面的总额扣掉现有重疾险能赔的钱，剩下的就是预计还需要补的金额。
             <span class="en" lang="en-MY">Subtract what your existing critical illness cover would pay from the total above. The amount left is what you may still need.</span>
@@ -349,7 +358,9 @@
     const copyResultButton = document.getElementById("copy-result");
     const copyFeedbackZh = document.getElementById("copy-feedback-zh");
     const copyFeedbackEn = document.getElementById("copy-feedback-en");
-    const copyFallback = document.getElementById("copy-fallback");
+    const copyPreviewText = document.getElementById("copy-preview-text");
+    const copyPreviewZh = document.getElementById("copy-preview-zh");
+    const copyPreviewEn = document.getElementById("copy-preview-en");
     const copyMessage = document.getElementById("copy-message");
     const gapSummary = document.getElementById("gap-summary");
     const gapSummaryZh = document.getElementById("gap-summary-zh");
@@ -450,7 +461,8 @@
       copyResultActions.hidden = firstTimeNote.hidden;
       copyFeedbackZh.textContent = "";
       copyFeedbackEn.textContent = "";
-      copyFallback.hidden = true;
+      copyPreviewText.hidden = false;
+      copyMessage.hidden = true;
       copyMessage.value = "";
       resultActions.hidden = firstIncomplete !== -1;
       status.classList.toggle("error", triedToSeeResults && firstIncomplete !== -1);
@@ -473,6 +485,8 @@
       if (firstTimeBuyer) {
         gapSummaryZh.textContent = "按你填的数字，预计需要 " + gapAmount.replace("RM ", "RM") + " 的重疾险赔款。";
         gapSummaryEn.textContent = "Based on your figures, you may need " + gapAmount + " in critical illness payout.";
+        copyPreviewZh.textContent = "您好，我估算需要 " + gapAmount + " 的重疾险赔款。请问如果我符合这份保单的理赔条件，在相关疾病和阶段实际能赔多少？";
+        copyPreviewEn.textContent = "Hi, I estimate I’ll need " + gapAmount + " in critical illness payout. If I meet this policy’s claim conditions, how much would it actually pay for the relevant illness and stage?";
       } else if (gap === 0n) {
         gapSummaryZh.textContent = "按你填的数字，这次估算不用再补赔款";
         gapSummaryEn.textContent = "Based on your figures, this estimate shows no extra payout is needed.";
@@ -541,22 +555,21 @@
     copyResultButton.addEventListener("click", async () => {
       if (copyResultActions.hidden) return;
       const amount = gapOutput.value;
-      const message = [
-        "您好，我估算需要 " + amount + " 的重疾险赔款。请问如果我符合这份保单的理赔条件，在相关疾病和阶段实际能赔多少？",
-        "Hi, I estimate I’ll need " + amount + " in critical illness payout. If I meet this policy’s claim conditions, how much would it actually pay for the relevant illness and stage?",
-      ].join("\n\n");
+      const message = [copyPreviewZh.textContent, copyPreviewEn.textContent].join("\n\n");
       try {
         await navigator.clipboard.writeText(message);
         if (copyResultActions.hidden || gapOutput.value !== amount) return;
-        copyFallback.hidden = true;
+        copyPreviewText.hidden = false;
+        copyMessage.hidden = true;
         copyFeedbackZh.textContent = "已复制，可贴给保险顾问。";
         copyFeedbackEn.textContent = "Copied. You can paste this to your insurance adviser.";
       } catch {
         if (copyResultActions.hidden || gapOutput.value !== amount) return;
-        copyFeedbackZh.textContent = "请从下方复制。";
-        copyFeedbackEn.textContent = "Copy the message below.";
+        copyFeedbackZh.textContent = "请手动复制上方文字。";
+        copyFeedbackEn.textContent = "Copy the text above manually.";
         copyMessage.value = message;
-        copyFallback.hidden = false;
+        copyPreviewText.hidden = true;
+        copyMessage.hidden = false;
         copyMessage.focus();
         copyMessage.select();
       }
